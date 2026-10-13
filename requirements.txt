@@ -1,0 +1,19 @@
+﻿# Data processing
+polars
+pandas
+pyarrow
+
+# API and validation
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+
+# Configuration
+python-dotenv
+
+# ClickHouse
+clickhouse-connect
+
+# Testing
+pytest
