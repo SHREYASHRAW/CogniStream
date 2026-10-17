@@ -99,4 +99,32 @@ Generated datasets, credentials, and local environment files should not be commi
 
 ## Project Status
 
-The repository structure and initial configuration are being prepared. Ingestion pipelines, analytical models, infrastructure, and dashboard components will be implemented incrementally and validated throughout development.
+**Current stage:** Data ingestion, processing, storage, and baseline analytics implemented.
+
+### Completed
+
+- Created synthetic developer activity event generators for GitHub, Slack, Jira, and IDE activity.
+- Implemented JSON schema validation for incoming events.
+- Processed and consolidated 120 synthetic events using Python and Polars.
+- Stored the unified event dataset in ClickHouse.
+- Created SQL analytics for source activity summaries and team-aware source transitions.
+- Classified source transitions using a configurable 30-minute event-gap threshold.
+- Validated event uniqueness, developer and team identifiers, and source values.
+
+### Current Dataset
+
+- **Total events:** 120
+- **Event sources:** GitHub, Slack, Jira, and IDE
+- **Synthetic developers:** 5
+- **Teams:** 2
+- **Analytical storage:** ClickHouse
+
+### Next Steps
+
+- Refine event-gap and uninterrupted-session definitions.
+- Add automated tests for analytics and data transformations.
+- Implement scheduled orchestration with Apache Airflow.
+- Develop aggregated analytics endpoints using FastAPI.
+- Build the React and Tremor.js dashboard.
+
+All current activity records are synthetic. Source transitions and event-gap classifications are workflow indicators, not direct measurements of cognitive load, interruptions, or recovery time.

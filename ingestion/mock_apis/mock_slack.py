@@ -7,6 +7,16 @@ random.seed(43)
 
 OUTPUT_FILE = Path("data/raw/slack_events.jsonl")
 
+OUTPUT_FILE = Path("data/raw/slack_events.jsonl")
+
+DEVELOPER_TEAMS = {
+    "developer_01": "team_01",
+    "developer_02": "team_01",
+    "developer_03": "team_01",
+    "developer_04": "team_02",
+    "developer_05": "team_02",
+}
+
 EVENT_TEMPLATES = [
     {
         "event_type": "message",
@@ -61,8 +71,8 @@ def generate_events(count=30):
             "event_id": f"slack_mock_{i:03d}",
             "source": "slack",
             "event_type": template["event_type"],
-            "developer_id": f"developer_{random.randint(1, 5):02d}",
-            "team_id": f"team_{random.randint(1, 2):02d}",
+            "developer_id": (developer_id := f"developer_{random.randint(1, 5):02d}"),
+            "team_id": DEVELOPER_TEAMS[developer_id],
             "timestamp": event_time.isoformat(),
             "metadata": template["metadata"].copy(),
         })
