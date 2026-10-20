@@ -1,20 +1,27 @@
 ﻿
 -- CogniStream: Team-aware source transition analysis.
--- Gap duration is time between recorded events, not measured
--- cognitive recovery time or proven interruption cost.
+-- Event gaps are not direct measures of cognitive recovery
+-- time or proven interruption cost.
 
 WITH settings AS
 (
     SELECT 1800 AS gap_threshold_seconds
 ),
 
-ordered_events AS
+numbered_events AS
 (
     SELECT
+        event_id,
         developer_id,
         team_id,
         source,
         timestamp,
+
+        row_number() OVER
+        (
+            PARTITION BY developer_id, team_id
+            ORDER BY timestamp, event_id
+        ) AS event_number,
 
         lagInFrame(source, 1, source) OVER
         (
@@ -42,8 +49,9 @@ transitions AS
         source AS current_source,
         dateDiff('second', previous_timestamp, timestamp)
             AS gap_seconds
-    FROM ordered_events
-    WHERE previous_source != source
+    FROM numbered_events
+    WHERE event_number > 1
+      AND previous_source != source
 )
 
 SELECT
