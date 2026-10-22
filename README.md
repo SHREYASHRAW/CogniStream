@@ -123,75 +123,84 @@ The first diagram represents the implemented workflow. The second shows planned 
 
 ---
 
+
 ## Current Implementation
 
 ### 1. Synthetic event generation
 
-Four generators simulate activity from:
+Four generators simulate developer activity from:
 
 - GitHub
 - Slack
 - Jira
 - IDE activity
 
-The generators produce JSONL records using a shared event structure. Developer and team identifiers are associated through a consistent mapping.
+The generators produce JSONL records using a shared event structure and consistent developer/team mappings.
+
+The current synthetic dataset contains 120 events, with 30 events from each source.
 
 ### 2. Event schema validation
 
-A JSON schema and validation script check incoming records before processing.
+A JSON schema and Python validation script check incoming records before processing.
 
-The latest recorded validation checkpoint reported:
+The latest recorded schema-validation checkpoint reported:
 
 - GitHub: 30 valid events
 - Slack: 30 valid events
 - Jira: 30 valid events
 - IDE: 30 valid events
 - **Total: 120 valid events**
+- **Validation errors: 0**
 
 ### 3. Data processing
 
 The Python processing pipeline:
 
-- Reads the four required JSONL input files.
+- Reads the four JSONL input files.
 - Parses JSON records and handles blank lines.
 - Reports missing files and malformed JSON.
 - Extracts consistent event fields.
-- Serializes metadata into a normalized JSON string.
+- Serializes metadata into a JSON string.
 - Converts timestamps to UTC-aware datetimes.
 - Sorts events chronologically.
 - Writes a compressed Parquet dataset.
 
 ### 4. ClickHouse storage
 
-The unified event dataset is stored in the `developer_events` table in the `cognistream` database.
+The unified dataset is stored in the `developer_events` table in the `cognistream` database.
 
-At the latest recorded checkpoint, the table contained 120 events with 120 unique event IDs. Data-quality checks reported no empty developer or team identifiers and no unexpected event sources.
+The latest verified dataset contains **120 events with 120 unique event IDs**. The table includes event identifiers, sources, event types, developer and team identifiers, timestamps, and JSON metadata.
 
 ### 5. SQL analytics
 
-The current SQL analytics include:
+The implemented SQL analytics include:
 
 - **Source activity summary:** event totals, active developers, and timestamp ranges by source.
 - **Source transition summary:** transitions grouped by team and source pair, including counts and event-to-event time gaps.
 - **Potential context switches:** chronological source changes for individual developers.
+- **Team-level gap summary:** event-gap counts and long-gap patterns grouped by team.
+- **Team-gap validation:** checks the classification of short gaps, long gaps, and source-change patterns.
+- **Developer-gap validation:** checks gap classifications for individual developers and verifies that gap categories are fully accounted for.
 
-These queries establish a baseline for exploratory analysis and future dashboard development.
+These queries provide descriptive workflow indicators for exploratory analysis. They do not directly measure cognitive load or productivity.
 
 ---
 
 ## Analytics Methodology
 
-CogniStream currently uses event sequences and time gaps as descriptive workflow indicators.
+CogniStream uses event sequences, source transitions, and time gaps as descriptive workflow indicators.
 
 ### Source transitions
 
-A transition occurs when two consecutive recorded events for the same developer and team have different source values.
+A transition occurs when two consecutive recorded events for the same developer have different source values. Transition summaries can be grouped by team and source pair.
 
 ### Event-gap classification
 
-The current transition summary uses a configurable initial threshold of **1,800 seconds (30 minutes)** to distinguish shorter from longer event gaps.
+The current analysis uses a threshold of **1,800 seconds (30 minutes)** to distinguish shorter from longer event gaps.
 
-This is an exploratory analytical assumption, not a validated cognitive-science threshold.
+The SQL validation queries check that gap classifications are internally consistent and identify long gaps that occur with or without a source change.
+
+This threshold is an exploratory analytical assumption, not a validated cognitive-science threshold.
 
 ### Important interpretation limits
 
@@ -199,37 +208,60 @@ This is an exploratory analytical assumption, not a validated cognitive-science 
 - A gap between events does not establish how long a developer needed to regain focus.
 - Synthetic events do not represent observed employee behavior.
 - Event counts are not equivalent to productivity or work quality.
+- Team and developer summaries describe the generated dataset, not actual employee performance.
 - The current dataset is too small and synthetic to support real-world performance conclusions.
 
-The objective is to build a sound data foundation and transparent analytical definitions before introducing more advanced interpretations.
+The objective is to establish a reliable data foundation and transparent analytical definitions before introducing more advanced interpretations.
 
 ---
 
 ## Data Quality and Testing
 
-CogniStream uses `pytest` to test event loading, processing, and processed-data integrity.
+CogniStream uses Python validation and ClickHouse SQL checks to inspect event integrity. The project also uses `pytest` to test event loading, processing, and processed-data integrity.
 
-The latest recorded test checkpoint passed **11 automated tests**:
+### Event schema and processing validation
 
-| Test area | Coverage |
-|---|---|
-| Event loading | Reads all four sources |
-| Field integrity | Preserves identifiers and metadata |
-| Input handling | Skips blank lines and detects missing files |
-| Error handling | Detects malformed JSON |
-| Processing output | Verifies Parquet creation and required columns |
-| Event uniqueness | Checks for duplicate event IDs |
-| Identifier quality | Checks developer and team identifiers |
-| Source integrity | Verifies expected event sources |
-| Timestamp quality | Checks non-null and sorted timestamps |
+The latest recorded schema-validation checkpoint reported **120 valid events out of 120**, with no validation errors.
 
-Run the current suite from the project root:
+### ClickHouse data-quality checks
+
+The SQL file `sql/analytics/validate_event_quality.sql` checks:
+
+- Total event row count.
+- Duplicate event IDs.
+- Missing required fields and individual identifiers.
+- Missing source, event type, and metadata values.
+- Unexpected source values.
+- Unexpected event type values.
+- Invalid JSON metadata.
+- Timestamps outside the current synthetic dataset window.
+- Developers assigned to more than one team.
+
+**Latest recorded result:** 120 event rows; zero duplicate IDs, missing required values, unexpected source or event types, invalid JSON metadata, out-of-window timestamps, or inconsistent developer/team assignments.
+
+The timestamp window is specific to the current synthetic dataset and should be updated when the expected dataset period changes.
+
+### Event-gap validation
+
+The SQL file `sql/analytics/validate_developer_gaps.sql` validates event-gap classifications for each developer. The current result accounts for **115 consecutive event gaps** across five synthetic developers:
+
+- 50 short gaps.
+- 65 long gaps.
+- 52 long gaps involving a source change.
+- 13 long gaps without a source change.
+- Zero unclassified gaps in the recorded validation output.
+
+These figures describe the current synthetic dataset and may change when the input events change.
+
+### Automated tests
+
+Run the current test suite from the project root:
 
 ```powershell
 python -m pytest -v
 ```
 
-The documented result reflects the last verified test run. Re-run the suite after making changes to confirm the current result.
+The previously recorded checkpoint passed 11 automated tests. Re-run the suite after making changes to verify the current result.
 
 ---
 

@@ -132,4 +132,31 @@ SELECT
     countIf(NOT isValidJSON(metadata_json)) AS issue_count
 FROM developer_events
 
+
+UNION ALL
+
+-- Flag timestamps outside the current synthetic dataset window.
+-- Update this window when the dataset's expected dates change.
+SELECT
+    'invalid_timestamp_window' AS check_name,
+    countIf(
+        timestamp < toDateTime64('2026-10-16 00:00:00', 3, 'UTC')
+        OR timestamp >= toDateTime64('2026-10-18 00:00:00', 3, 'UTC')
+    ) AS issue_count
+FROM developer_events
+
+UNION ALL
+
+-- Each developer should belong to exactly one team.
+SELECT
+    'inconsistent_developer_team' AS check_name,
+    count() AS issue_count
+FROM
+(
+    SELECT developer_id
+    FROM developer_events
+    GROUP BY developer_id
+    HAVING countDistinct(team_id) > 1
+)
+
 ORDER BY check_name;
