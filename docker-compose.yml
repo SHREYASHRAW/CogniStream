@@ -1,0 +1,29 @@
+
+services:
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: cognistream-airflow
+    restart: unless-stopped
+    command: standalone
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/cognistream/airflow/dags
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      COGNISTREAM_PROJECT_ROOT: /opt/cognistream
+      CLICKHOUSE_HOST: host.docker.internal
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: cognistream
+      CLICKHOUSE_USER: cogni
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?Set CLICKHOUSE_PASSWORD in your environment}
+    volumes:
+      - ./:/opt/cognistream
+      - airflow_data:/opt/airflow
+    mem_limit: 1800m
+
+volumes:
+  airflow_data:

@@ -1,0 +1,7 @@
+
+# CogniStream pipeline dependencies required inside the Airflow container
+polars
+pandas
+pyarrow
+python-dotenv
+clickhouse-connect
