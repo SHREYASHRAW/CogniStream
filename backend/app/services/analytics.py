@@ -21,7 +21,9 @@ def get_summary():
 
         source_result = client.query(
             """
-            SELECT source, count() AS event_count
+            SELECT
+                source,
+                count() AS event_count
             FROM developer_events
             GROUP BY source
             ORDER BY source
@@ -37,5 +39,32 @@ def get_summary():
                 for source, count in source_result.result_rows
             ],
         }
+    finally:
+        client.close()
+
+
+def get_event_trends():
+    """Return event counts grouped by hour in UTC."""
+    client = get_clickhouse_client()
+
+    try:
+        result = client.query(
+            """
+            SELECT
+                toStartOfHour(timestamp) AS hour,
+                count() AS event_count
+            FROM developer_events
+            GROUP BY hour
+            ORDER BY hour
+            """
+        )
+
+        return [
+            {
+                "timestamp": hour.isoformat(),
+                "event_count": count,
+            }
+            for hour, count in result.result_rows
+        ]
     finally:
         client.close()
