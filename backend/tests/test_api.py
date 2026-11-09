@@ -157,3 +157,173 @@ def test_source_activity_endpoint():
 
     assert data[1]["source"] == "slack"
     assert data[1]["total_events"] == 30
+
+
+def test_context_switches_endpoint():
+    mock_data = [
+        {
+            "developer_id": "developer_01",
+            "team_id": "team_01",
+            "previous_source": "ide",
+            "current_source": "jira",
+            "previous_timestamp": "2026-10-16T15:47:05.188000",
+            "current_timestamp": "2026-10-16T16:03:10.352000",
+            "gap_seconds": 965,
+        },
+        {
+            "developer_id": "developer_02",
+            "team_id": "team_01",
+            "previous_source": "github",
+            "current_source": "slack",
+            "previous_timestamp": "2026-10-16T14:00:00",
+            "current_timestamp": "2026-10-16T14:10:00",
+            "gap_seconds": 600,
+        },
+    ]
+
+    with patch(
+        "backend.app.api.analytics.get_context_switches",
+        return_value=mock_data,
+    ):
+        response = client.get("/api/v1/context-switches")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    assert data[0]["developer_id"] == "developer_01"
+    assert data[0]["previous_source"] == "ide"
+    assert data[0]["current_source"] == "jira"
+    assert data[0]["gap_seconds"] == 965
+
+    assert data[1]["developer_id"] == "developer_02"
+    assert data[1]["previous_source"] == "github"
+    assert data[1]["current_source"] == "slack"
+    assert data[1]["gap_seconds"] == 600
+
+
+def test_context_switches_endpoint_returns_empty_list():
+    with patch(
+        "backend.app.api.analytics.get_context_switches",
+        return_value=[],
+    ):
+        response = client.get("/api/v1/context-switches")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+def test_developer_transition_summary_endpoint():
+    mock_data = [
+        {
+            "developer_id": "developer_01",
+            "team_id": "team_01",
+            "total_transitions": 27,
+            "short_gap_transitions": 14,
+            "long_gap_transitions": 13,
+            "avg_gap_seconds": 2744.4,
+            "min_gap_seconds": 126,
+            "max_gap_seconds": 18954,
+        },
+        {
+            "developer_id": "developer_05",
+            "team_id": "team_02",
+            "total_transitions": 22,
+            "short_gap_transitions": 11,
+            "long_gap_transitions": 11,
+            "avg_gap_seconds": 2900.7,
+            "min_gap_seconds": 30,
+            "max_gap_seconds": 10319,
+        },
+    ]
+
+    with patch(
+        "backend.app.api.analytics.get_developer_transition_summary",
+        return_value=mock_data,
+    ):
+        response = client.get(
+            "/api/v1/developers/transitions/summary"
+        )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+
+    assert data[0]["developer_id"] == "developer_01"
+    assert data[0]["total_transitions"] == 27
+    assert data[0]["short_gap_transitions"] == 14
+    assert data[0]["long_gap_transitions"] == 13
+
+    assert data[1]["developer_id"] == "developer_05"
+    assert data[1]["total_transitions"] == 22
+
+
+def test_developer_transition_summary_endpoint_returns_empty_list():
+    with patch(
+        "backend.app.api.analytics.get_developer_transition_summary",
+        return_value=[],
+    ):
+        response = client.get(
+            "/api/v1/developers/transitions/summary"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+def test_transition_summary_endpoint():
+    mock_data = [
+        {
+            "team_id": "team_01",
+            "previous_source": "github",
+            "current_source": "slack",
+            "total_transitions": 12,
+            "short_gap_transitions": 5,
+            "long_gap_transitions": 7,
+            "avg_gap_seconds": 3200.5,
+            "min_gap_seconds": 120,
+            "max_gap_seconds": 9000,
+        },
+        {
+            "team_id": "team_02",
+            "previous_source": "ide",
+            "current_source": "jira",
+            "total_transitions": 8,
+            "short_gap_transitions": 4,
+            "long_gap_transitions": 4,
+            "avg_gap_seconds": 2500.0,
+            "min_gap_seconds": 300,
+            "max_gap_seconds": 6000,
+        },
+    ]
+
+    with patch(
+        "backend.app.api.analytics.get_transition_summary",
+        return_value=mock_data,
+    ):
+        response = client.get("/api/v1/transitions/summary")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 2
+    assert data[0]["team_id"] == "team_01"
+    assert data[0]["total_transitions"] == 12
+    assert data[0]["short_gap_transitions"] == 5
+    assert data[0]["long_gap_transitions"] == 7
+    assert data[1]["team_id"] == "team_02"
+    assert data[1]["total_transitions"] == 8
+
+
+def test_transition_summary_endpoint_returns_empty_list():
+    with patch(
+        "backend.app.api.analytics.get_transition_summary",
+        return_value=[],
+    ):
+        response = client.get("/api/v1/transitions/summary")
+
+    assert response.status_code == 200
+    assert response.json() == []
