@@ -26,11 +26,19 @@ const navigation = [
 
 function App() {
   const [activePage, setActivePage] = useState("Overview");
+
   const [summary, setSummary] = useState(null);
   const [hourlyData, setHourlyData] = useState([]);
   const [developerData, setDeveloperData] = useState([]);
   const [sourceData, setSourceData] = useState([]);
   const [contextData, setContextData] = useState([]);
+  const [teamTransitionData, setTeamTransitionData] = useState([]);
+  const [developerTransitionData, setDeveloperTransitionData] =
+    useState([]);
+
+  const [selectedTeam, setSelectedTeam] = useState("All");
+  const [selectedDeveloper, setSelectedDeveloper] = useState("All");
+
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
 
@@ -43,6 +51,8 @@ function App() {
           "/api/v1/developers/activity",
           "/api/v1/sources/activity",
           "/api/v1/context-switches",
+          "/api/v1/transitions/summary",
+          "/api/v1/developers/transitions/summary",
         ];
 
         const responses = await Promise.all(
@@ -59,9 +69,14 @@ function App() {
           developerResult,
           sourceResult,
           contextResult,
-        ] = await Promise.all(responses.map((response) => response.json()));
+          teamTransitionResult,
+          developerTransitionResult,
+        ] = await Promise.all(
+          responses.map((response) => response.json())
+        );
 
         setSummary(summaryResult);
+
         setHourlyData(
           hourlyResult.map((item) => ({
             hour: new Date(item.timestamp).toLocaleString([], {
@@ -75,6 +90,7 @@ function App() {
         setDeveloperData(
           developerResult.map((developer) => {
             const counts = {};
+
             developer.events_by_source.forEach((item) => {
               counts[item.source] = item.count;
             });
@@ -93,6 +109,8 @@ function App() {
 
         setSourceData(sourceResult);
         setContextData(contextResult);
+        setTeamTransitionData(teamTransitionResult);
+        setDeveloperTransitionData(developerTransitionResult);
         setApiError("");
       } catch (error) {
         setApiError(error.message);
@@ -104,7 +122,7 @@ function App() {
     loadDashboard();
   }, []);
 
-  // Aggregate transition records by developer.
+  // Context-switch records grouped by developer.
   const developerSwitchData = useMemo(() => {
     const grouped = {};
 
@@ -132,13 +150,12 @@ function App() {
     );
   }, [contextData]);
 
-  // Aggregate source-to-source transition patterns.
+  // Source-to-source transition patterns.
   const transitionPatterns = useMemo(() => {
     const grouped = {};
 
     contextData.forEach((item) => {
       const label = `${item.previous_source} → ${item.current_source}`;
-
       grouped[label] = (grouped[label] || 0) + 1;
     });
 
@@ -147,11 +164,95 @@ function App() {
       .sort((a, b) => b.count - a.count);
   }, [contextData]);
 
+  // Team transition patterns for the chart.
+  const teamTransitionChartData = useMemo(() => {
+    return teamTransitionData
+      .filter(
+        (item) =>
+          selectedTeam === "All" || item.team_id === selectedTeam
+      )
+      .map((item) => ({
+        transition: `${item.previous_source} → ${item.current_source}`,
+        team_id: item.team_id,
+        total_transitions: item.total_transitions,
+        short_gap_transitions: item.short_gap_transitions,
+        long_gap_transitions: item.long_gap_transitions,
+      }))
+      .sort((a, b) => b.total_transitions - a.total_transitions);
+  }, [teamTransitionData, selectedTeam]);
+
+  // Developer transition summaries filtered by team and developer.
+  const filteredDeveloperTransitions = useMemo(() => {
+    return developerTransitionData.filter((item) => {
+      const matchesTeam =
+        selectedTeam === "All" || item.team_id === selectedTeam;
+
+      const matchesDeveloper =
+        selectedDeveloper === "All" ||
+        item.developer_id === selectedDeveloper;
+
+      return matchesTeam && matchesDeveloper;
+    });
+  }, [developerTransitionData, selectedTeam, selectedDeveloper]);
+
+  // Team transition table filtered by selected team.
+  const filteredTeamTransitions = useMemo(() => {
+    return teamTransitionData.filter(
+      (item) =>
+        selectedTeam === "All" || item.team_id === selectedTeam
+    );
+  }, [teamTransitionData, selectedTeam]);
+
+  // Keep developer filter options relevant to the selected team.
+  const availableDevelopers = useMemo(() => {
+    return developerTransitionData
+      .filter(
+        (item) =>
+          selectedTeam === "All" || item.team_id === selectedTeam
+      )
+      .map((item) => item.developer_id)
+      .sort();
+  }, [developerTransitionData, selectedTeam]);
+
+  // Filter the recent event-level transitions.
+  const filteredContextData = useMemo(() => {
+    return contextData.filter((item) => {
+      const developer = developerData.find(
+        (person) => person.developer_id === item.developer_id
+      );
+
+      const matchesTeam =
+        selectedTeam === "All" ||
+        developer?.team_id === selectedTeam;
+
+      const matchesDeveloper =
+        selectedDeveloper === "All" ||
+        item.developer_id === selectedDeveloper;
+
+      return matchesTeam && matchesDeveloper;
+    });
+  }, [contextData, developerData, selectedTeam, selectedDeveloper]);
+
   const shortGapCount = contextData.filter(
     (item) => item.gap_seconds <= 1800
   ).length;
 
   const longGapCount = contextData.length - shortGapCount;
+
+  const filteredTotalTransitions = filteredDeveloperTransitions.reduce(
+    (sum, item) => sum + item.total_transitions,
+    0
+  );
+
+  const filteredShortTransitions = filteredDeveloperTransitions.reduce(
+    (sum, item) => sum + item.short_gap_transitions,
+    0
+  );
+
+  const filteredLongTransitions = filteredDeveloperTransitions.reduce(
+    (sum, item) => sum + item.long_gap_transitions,
+    0
+  );
 
   const formatTimestamp = (value) => {
     if (!value) return "—";
@@ -223,6 +324,29 @@ function App() {
     },
   ];
 
+  const transitionMetrics = [
+    {
+      title: "Filtered Transitions",
+      value: filteredTotalTransitions,
+      description: "For current selection",
+    },
+    {
+      title: "Shorter Gaps",
+      value: filteredShortTransitions,
+      description: "Up to 30 minutes",
+    },
+    {
+      title: "Longer Gaps",
+      value: filteredLongTransitions,
+      description: "Over 30 minutes",
+    },
+    {
+      title: "Developers",
+      value: filteredDeveloperTransitions.length,
+      description: "In current selection",
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="flex min-h-screen">
@@ -236,7 +360,9 @@ function App() {
               </div>
               <div>
                 <h1 className="text-lg font-bold">CogniStream</h1>
-                <p className="text-xs text-slate-500">Developer Analytics</p>
+                <p className="text-xs text-slate-500">
+                  Developer Analytics
+                </p>
               </div>
             </div>
           </div>
@@ -275,7 +401,9 @@ function App() {
         <main className="min-w-0 flex-1">
           <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5 lg:px-10">
             <div>
-              <p className="text-sm text-slate-500">Workspace / Analytics</p>
+              <p className="text-sm text-slate-500">
+                Workspace / Analytics
+              </p>
               <h2 className="mt-1 text-xl font-bold">{activePage}</h2>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
@@ -322,7 +450,9 @@ function App() {
             <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <Card className="xl:col-span-2">
                 <Title>Hourly Activity Trends</Title>
-                <Text>Developer workflow events recorded per hour.</Text>
+                <Text>
+                  Developer workflow events recorded per hour.
+                </Text>
 
                 <div className="mt-6">
                   <AreaChart
@@ -374,7 +504,7 @@ function App() {
               </Card>
             </section>
 
-            {/* Developer Comparison */}
+            {/* Developer Activity */}
             <section>
               <Card>
                 <Title>Developer Activity Comparison</Title>
@@ -403,7 +533,9 @@ function App() {
                         <tr className="border-b text-slate-500">
                           <th className="px-3 py-3">Developer</th>
                           <th className="px-3 py-3">Team</th>
-                          <th className="px-3 py-3 text-right">Total Events</th>
+                          <th className="px-3 py-3 text-right">
+                            Total Events
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -415,7 +547,9 @@ function App() {
                             <td className="px-3 py-3 font-medium">
                               {developer.developer_id}
                             </td>
-                            <td className="px-3 py-3">{developer.team_id}</td>
+                            <td className="px-3 py-3">
+                              {developer.team_id}
+                            </td>
                             <td className="px-3 py-3 text-right font-semibold">
                               {developer.total_events}
                             </td>
@@ -448,12 +582,16 @@ function App() {
                         }`}
                       />
                     </div>
-                    <Metric className="mt-3">{source.total_events}</Metric>
+                    <Metric className="mt-3">
+                      {source.total_events}
+                    </Metric>
                     <Text>Recorded events</Text>
 
                     <div className="mt-5 border-t border-slate-100 pt-4">
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Active developers</span>
+                        <span className="text-slate-500">
+                          Active developers
+                        </span>
                         <span className="font-semibold">
                           {source.active_developers}
                         </span>
@@ -589,6 +727,216 @@ function App() {
                             </td>
                           </tr>
                         ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </section>
+
+            {/* Transition Summary Analytics */}
+            <section>
+              <div className="mb-6">
+                <Title>Transition Summary Analytics</Title>
+                <Text>
+                  Compare aggregated source transitions across teams and developers.
+                </Text>
+              </div>
+
+              {/* Filters */}
+              <Card>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="team-filter"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Filter by Team
+                    </label>
+                    <select
+                      id="team-filter"
+                      value={selectedTeam}
+                      onChange={(event) => {
+                        setSelectedTeam(event.target.value);
+                        setSelectedDeveloper("All");
+                      }}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="All">All Teams</option>
+                      {[...new Set(
+                        teamTransitionData.map((item) => item.team_id)
+                      )]
+                        .sort()
+                        .map((team) => (
+                          <option key={team} value={team}>
+                            {team}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="developer-filter"
+                      className="mb-2 block text-sm font-medium text-slate-700"
+                    >
+                      Filter by Developer
+                    </label>
+                    <select
+                      id="developer-filter"
+                      value={selectedDeveloper}
+                      onChange={(event) =>
+                        setSelectedDeveloper(event.target.value)
+                      }
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="All">All Developers</option>
+                      {availableDevelopers.map((developer) => (
+                        <option key={developer} value={developer}>
+                          {developer}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Filtered KPIs */}
+              <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                {transitionMetrics.map((item) => (
+                  <Card key={item.title}>
+                    <Text>{item.title}</Text>
+                    <Metric className="mt-3">{item.value}</Metric>
+                    <Text className="mt-2">{item.description}</Text>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Developer Transition Comparison */}
+              <Card className="mt-5">
+                <Title>Developer Transition Comparison</Title>
+                <Text>
+                  Total transitions and gap categories by developer.
+                </Text>
+
+                <div className="mt-6">
+                  <BarChart
+                    className="h-80"
+                    data={filteredDeveloperTransitions}
+                    index="developer_id"
+                    categories={[
+                      "short_gap_transitions",
+                      "long_gap_transitions",
+                    ]}
+                    colors={["emerald", "violet"]}
+                    showLegend
+                    showGridLines
+                    yAxisWidth={45}
+                  />
+                </div>
+
+                <div className="mt-5 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500">
+                        <th className="px-3 py-3">Developer</th>
+                        <th className="px-3 py-3">Team</th>
+                        <th className="px-3 py-3 text-right">Transitions</th>
+                        <th className="px-3 py-3 text-right">Short Gaps</th>
+                        <th className="px-3 py-3 text-right">Long Gaps</th>
+                        <th className="px-3 py-3 text-right">Avg Gap</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDeveloperTransitions.map((item) => (
+                        <tr
+                          key={item.developer_id}
+                          className="border-b border-slate-100"
+                        >
+                          <td className="px-3 py-3 font-medium">
+                            {item.developer_id}
+                          </td>
+                          <td className="px-3 py-3">{item.team_id}</td>
+                          <td className="px-3 py-3 text-right font-semibold">
+                            {item.total_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {item.short_gap_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {item.long_gap_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {formatGap(item.avg_gap_seconds)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+
+              {/* Team Transition Patterns */}
+              <Card className="mt-5">
+                <Title>Team Source Transition Patterns</Title>
+                <Text>
+                  Frequency of source-to-source transitions grouped by team.
+                </Text>
+
+                <div className="mt-6">
+                  <BarChart
+                    className="h-80"
+                    data={teamTransitionChartData}
+                    index="transition"
+                    categories={["total_transitions"]}
+                    colors={["blue"]}
+                    showLegend={false}
+                    showGridLines
+                    yAxisWidth={45}
+                  />
+                </div>
+
+                <div className="mt-5 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500">
+                        <th className="px-3 py-3">Team</th>
+                        <th className="px-3 py-3">From</th>
+                        <th className="px-3 py-3">To</th>
+                        <th className="px-3 py-3 text-right">Total</th>
+                        <th className="px-3 py-3 text-right">Short Gaps</th>
+                        <th className="px-3 py-3 text-right">Long Gaps</th>
+                        <th className="px-3 py-3 text-right">Avg Gap</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTeamTransitions.map((item, index) => (
+                        <tr
+                          key={`${item.team_id}-${item.previous_source}-${item.current_source}-${index}`}
+                          className="border-b border-slate-100"
+                        >
+                          <td className="px-3 py-3 font-medium">
+                            {item.team_id}
+                          </td>
+                          <td className="px-3 py-3 capitalize">
+                            {item.previous_source}
+                          </td>
+                          <td className="px-3 py-3 capitalize">
+                            {item.current_source}
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold">
+                            {item.total_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {item.short_gap_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {item.long_gap_transitions}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {formatGap(item.avg_gap_seconds)}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
