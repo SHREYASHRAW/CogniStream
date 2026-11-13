@@ -1,645 +1,377 @@
 # CogniStream
+### Developer Flow-State & Cognitive Load Analytics
 
-## Developer Flow-State & Cognitive Load Analytics
+CogniStream is an end-to-end data analytics and engineering project designed to analyze developer workflow activity across multiple development tools. It transforms synthetic GitHub, Slack, Jira, and IDE events into structured analytical datasets and presents workflow activity insights through an interactive dashboard.
 
-CogniStream is a data engineering and analytics portfolio project that explores developer workflows, cross-platform activity, and potential context switching.
-
-It unifies **synthetic activity events** from GitHub, Slack, Jira, and IDE activity into an analytical dataset. Event sequences, source transitions, and time gaps are used as descriptive workflow indicators — not as direct measurements of cognitive load or productivity.
-
-> **Current project status:** Synthetic event generation, schema validation, Python/Polars processing, ClickHouse storage, SQL analytics, Apache Airflow orchestration, a FastAPI analytics endpoint, and automated tests are implemented. The React + Tremor.js dashboard and additional advanced analytics remain in progress.
+The project demonstrates an integrated data engineering and analytics workflow using Python, Polars, Apache Airflow, ClickHouse, SQL, FastAPI, React, and Tremor.
 
 ---
 
-## Table of Contents
+## Project Overview
 
-1. [Introduction](#introduction)
-2. [Problem Statement](#problem-statement)
-3. [Project Objectives](#project-objectives)
-4. [System Architecture](#system-architecture)
-5. [Technology Stack](#technology-stack)
-6. [Current Implementation](#current-implementation)
-7. [Data Model](#data-model)
-8. [Data Pipeline Workflow](#data-pipeline-workflow)
-9. [Analytics Methodology](#analytics-methodology)
-10. [API Reference](#api-reference)
-11. [Project Demonstration Guide](#project-demonstration-guide)
-12. [Data Quality and Testing](#data-quality-and-testing)
-13. [Repository Structure](#repository-structure)
-14. [Getting Started](#getting-started)
-15. [Current Limitations](#current-limitations)
-16. [Future Roadmap](#future-roadmap)
-17. [Project Philosophy](#project-philosophy)
+Modern software development involves switching between multiple tools and platforms throughout the workday. Understanding these activity patterns can help teams identify workflow interruptions, tool transitions, and periods of developer activity.
 
----
+CogniStream processes event-level activity data to explore these patterns through analytical metrics and interactive visualizations.
 
-## 1. Introduction
+**Project objectives:**
+- Simulate developer activity across multiple development platforms.
+- Validate incoming events using structured schemas.
+- Process and transform event data using Python and Polars.
+- Store processed data in ClickHouse.
+- Analyze developer activity and source transitions using SQL.
+- Expose analytical results through REST APIs.
+- Visualize workflow insights through an interactive React dashboard.
+- Orchestrate pipeline execution using Apache Airflow.
 
-Software developers regularly interact with multiple platforms during their work.
+## Key Features
 
-These platforms may include:
+- **Multi-source event ingestion:** Synthetic events from GitHub, Slack, Jira, and IDE activity.
+- **Schema validation:** Validation of incoming JSONL events before processing.
+- **Data transformation:** Event processing and Parquet generation using Polars.
+- **Analytical storage:** Centralized event storage in ClickHouse.
+- **SQL analytics:** Developer activity, source activity, hourly trends, and source-transition analysis.
+- **REST API:** FastAPI endpoints serving dashboard analytics.
+- **Interactive dashboard:** React and Tremor-based visualizations with team and developer filters.
+- **Workflow orchestration:** Apache Airflow DAG coordinating validation, processing, loading, and verification.
+- **Automated testing:** Backend and analytics tests using pytest.
 
-- GitHub for code changes and repository activity.
-- Slack for communication.
-- Jira for issue and task management.
-- IDE tools for coding activity.
+## Architecture
 
-Activity information is distributed across these platforms. CogniStream explores how events from different sources can be collected, standardized, processed, stored, and analyzed in one system.
+The following diagram illustrates the data flow and orchestration architecture of CogniStream.
 
-The project focuses on building a complete data engineering workflow and using its output to explore developer activity patterns.
+```mermaid
+flowchart TB
+    subgraph SOURCES["DATA SOURCES"]
+        GH["GitHub Events"]
+        SL["Slack Events"]
+        JR["Jira Events"]
+        IDE["IDE Events"]
+    end
 
-The current dataset is synthetic and is intended for development, testing, and demonstration.
+    subgraph PIPELINE["DATA ENGINEERING PIPELINE"]
+        RAW["Synthetic JSONL Event Data"]
+        VAL["Schema Validation"]
+        POLARS["Python + Polars Processing"]
+        PARQUET["Parquet Dataset"]
+        CH["ClickHouse Database"]
+    end
 
-## 2. Problem Statement
+    subgraph ANALYTICS["ANALYTICS AND API"]
+        SQL["SQL Analytics"]
+        API["FastAPI Backend"]
+    end
 
-Developer activity is distributed across several tools. A developer may move between coding, reviewing pull requests, checking messages, and updating tasks throughout a work session.
+    subgraph FRONTEND["PRESENTATION"]
+        UI["React + Tremor Dashboard"]
+    end
 
-Without a unified view, it can be difficult to understand the sequence and distribution of these activities.
+    subgraph ORCHESTRATION["WORKFLOW ORCHESTRATION"]
+        AF["Apache Airflow DAG"]
+        T1["Validate Raw Events"]
+        T2["Combine Events to Parquet"]
+        T3["Load Events to ClickHouse"]
+        T4["Verify ClickHouse Load"]
 
-CogniStream explores questions such as:
+        AF --> T1 --> T2 --> T3 --> T4
+    end
 
-- How is developer activity distributed across different tools?
-- How frequently do recorded events transition between sources?
-- How do event-to-event time gaps vary?
-- How can activity patterns be represented in an analytics dashboard?
-- How can these indicators help explore developer workflow behavior?
+    GH --> RAW
+    SL --> RAW
+    JR --> RAW
+    IDE --> RAW
 
-A source transition does not necessarily mean an interruption occurred. Similarly, a gap between two events does not prove that productivity or concentration was lost.
+    RAW --> VAL --> POLARS --> PARQUET --> CH
+    CH --> SQL --> API --> UI
 
-## 3. Project Objectives
-
-The main objectives are:
-
-1. Generate representative synthetic developer activity events from multiple sources.
-2. Validate events against a common schema.
-3. Consolidate events into a unified dataset using Python and Polars.
-4. Store processed events in ClickHouse.
-5. Analyze activity distribution, source transitions, and event gaps.
-6. Orchestrate the data pipeline using Apache Airflow.
-7. Expose summary analytics through a FastAPI backend.
-8. Test data processing and API behavior automatically.
-9. Develop an interactive React + Tremor.js dashboard.
-
-## 4. System Architecture
-
-### 4.1 Overall architecture
-
-The project follows a data engineering pipeline architecture.
-
-```text
-                 DATA SOURCES
-        ┌──────────┬──────────┬──────────┐
-        │ GitHub   │ Slack    │ Jira     │
-        └──────────┴──────────┴──────────┘
-                         │
-                  ┌─────────────┐
-                  │ IDE Activity│
-                  └─────────────┘
-                         │
-                         ▼
-              SYNTHETIC EVENT DATA
-                         │
-                         ▼
-                SCHEMA VALIDATION
-                         │
-                         ▼
-              PYTHON + POLARS
-                  PROCESSING
-                         │
-                         ▼
-               PARQUET DATASET
-                         │
-                         ▼
-                   CLICKHOUSE
-                         │
-                         ▼
-                SQL ANALYTICS
-                         │
-                         ▼
-                  FASTAPI BACKEND
-                         │
-                         ▼
-                ANALYTICS DASHBOARD
-                 (PLANNED / IN PROGRESS)
-
-        APACHE AIRFLOW ORCHESTRATES
-        THE VALIDATION, PROCESSING,
-        LOADING AND VERIFICATION TASKS
+    T1 -. "orchestrates" .-> VAL
+    T2 -. "orchestrates" .-> POLARS
+    T3 -. "orchestrates" .-> CH
+    T4 -. "verifies" .-> CH
 ```
 
-### 4.2 Implemented data pipeline
+**Architecture explanation:**
 
-The implemented pipeline consists of:
+1. Synthetic developer activity events are generated from four sources.
+2. Incoming JSONL records undergo schema validation.
+3. Python and Polars process the validated events.
+4. Processed events are stored as Parquet files.
+5. Data is loaded into ClickHouse for analytical querying.
+6. SQL queries generate workflow and transition analytics.
+7. FastAPI exposes analytical results through REST endpoints.
+8. React and Tremor display the results in an interactive dashboard.
+9. Apache Airflow orchestrates the pipeline tasks and verifies the ClickHouse load.
 
-1. Synthetic event generation.
-2. Event schema validation.
-3. Data consolidation and transformation.
-4. Parquet dataset generation.
-5. ClickHouse loading.
-6. Data load verification.
-7. Backend analytics.
-
-### 4.3 Planned frontend architecture
-
-The planned frontend will consume analytics from the FastAPI backend.
-
-```text
-       REACT + TREMOR.JS
-          DASHBOARD
-               │
-               ▼
-        FASTAPI BACKEND
-               │
-               ▼
-           CLICKHOUSE
-```
-
-The current backend provides a summary endpoint. The complete interactive dashboard and additional dashboard-oriented analytics are not yet implemented.
-
-## 5. Technology Stack
+## Technology Stack
 
 | Technology | Purpose | Status |
 |---|---|---|
-| Python | Event validation, processing and backend development | Implemented |
-| JSON / JSONL | Synthetic event records | Implemented |
+| Python | Data processing and backend development | Implemented |
 | Polars | Data transformation and processing | Implemented |
-| Parquet | Processed event storage | Implemented |
-| ClickHouse | Analytical event storage and querying | Implemented |
-| SQL | Activity summaries and source-transition analysis | Implemented |
 | Apache Airflow | Pipeline orchestration | Implemented and tested |
-| FastAPI | Backend analytics API | Implemented |
-| Uvicorn | Local API server | Used for development |
-| pytest | Automated testing | Implemented |
-| React | Frontend development | Planned / in progress |
-| Tremor.js | Dashboard visualizations | Planned / in progress |
-| Git and GitHub | Version control | Used |
+| ClickHouse | Analytical database | Implemented |
+| SQL | Workflow and transition analytics | Implemented |
+| FastAPI | REST API development | Implemented and tested |
+| React | Frontend dashboard | Implemented and tested |
+| Tremor.js | Dashboard visualizations | Implemented and tested |
+| Tailwind CSS | Frontend styling | Implemented |
+| pytest | Automated testing | Implemented and tested |
+| Docker | Containerized services | Implemented |
 
-### Why these technologies?
+## Dataset Overview
 
-**Python:** Used as the primary programming language for event validation, transformation, and backend development.
+CogniStream uses synthetic developer activity data generated across four sources:
 
-**Polars:** Used for efficient DataFrame operations and processing the event records.
+| Data Source | Events |
+|---|---:|
+| GitHub | 30 |
+| Slack | 30 |
+| Jira | 30 |
+| IDE | 30 |
+| **Total** | **120** |
 
-**Parquet:** Provides a columnar format for storing the consolidated dataset efficiently.
-
-**ClickHouse:** Used as the analytical database for storing and querying event data.
-
-**Apache Airflow:** Manages the sequence of pipeline tasks and their dependencies.
-
-**FastAPI:** Exposes backend functionality and analytics through HTTP endpoints.
-
-**React and Tremor.js:** Planned for the interactive dashboard and visualization of analytical results.
-
-## 6. Current Implementation
-
-### 6.1 Synthetic event generation
-
-Four sources simulate developer activity:
-
-- GitHub
-- Slack
-- Jira
-- IDE activity
-
-The current synthetic dataset contains **120 events**, with **30 events per source**.
-
-The dataset represents simulated activity and does not contain real employee behavior.
-
-### 6.2 Event schema validation
-
-A JSON schema and Python validation script check event records before processing.
-
-The latest recorded validation checkpoint reported:
-
+**Dataset characteristics:**
 - Total events: 120
-- Valid events: 120
-- Validation errors: 0
+- Data sources: 4
+- Developers: 5
+- Teams: 2
+- Unique event IDs: 120
+- Data format: JSONL and Parquet
 
-Run validation from the project root:
+The synthetic dataset is intended for demonstrating data engineering and analytics workflows. It does not represent real developer activity.
+
+## Data Processing Pipeline
+
+The pipeline consists of the following stages:
+
+**1. Event ingestion**
+
+Synthetic JSONL event files are maintained separately for GitHub, Slack, Jira, and IDE activity.
+
+**2. Schema validation**
+
+Incoming records are validated against their respective event schemas before processing.
+
+**3. Data transformation**
+
+Polars combines and processes the validated event data into a unified dataset.
+
+**4. Parquet generation**
+
+The processed events are stored in Parquet format for efficient analytical processing.
+
+**5. ClickHouse loading**
+
+The unified dataset is loaded into the `cognistream` database, in the `developer_events` table.
+
+**6. Data verification**
+
+The pipeline verifies the ClickHouse load, including the expected event count.
+
+## Apache Airflow Orchestration
+
+CogniStream uses an Apache Airflow DAG named:
+
+`cognistream_pipeline`
+
+The DAG contains four sequential tasks:
+
+| Task | Description |
+|---|---|
+| `validate_raw_events` | Validates raw JSONL event records |
+| `combine_events_to_parquet` | Processes events and generates the Parquet dataset |
+| `load_events_to_clickhouse` | Loads processed events into ClickHouse |
+| `verify_clickhouse_load` | Verifies the ClickHouse data load |
+
+**Pipeline validation result:**
+
+All four tasks completed successfully during a manual DAG execution.
+
+## Analytics Methodology
+
+CogniStream focuses on understanding developer activity patterns and source transitions.
+
+### 1. Developer Activity Analysis
+- Event counts by developer.
+- Developer-level activity distribution.
+- Activity breakdown by source.
+
+### 2. Source Activity Analysis
+- Event counts by platform.
+- Distribution across GitHub, Slack, Jira, and IDE.
+- Source-level activity comparisons.
+
+### 3. Hourly Activity Trends
+- Event distribution across hours.
+- Identification of activity patterns throughout the day.
+
+### 4. Source Transition Analysis
+
+Source transitions are identified when consecutive events for a developer belong to different sources.
+
+The analysis uses event timestamps and developer/team identifiers to calculate the time gap between consecutive events.
+
+### 5. Transition Gap Classification
+
+Transition gaps are classified using a configurable 30-minute threshold:
+
+- **Short gap:** 30 minutes or less.
+- **Long gap:** More than 30 minutes.
+
+The current dataset contains:
+
+| Metric | Result |
+|---|---:|
+| Total source transitions | 94 |
+| Short-gap transitions | 42 |
+| Long-gap transitions | 52 |
+| Developers analyzed | 5 |
+
+These classifications are exploratory analytical proxies. They should not be interpreted as direct measurements of cognitive load, interruptions, recovery, productivity, or mental state.
+
+## FastAPI Backend
+
+FastAPI provides REST endpoints to serve analytical data to the React dashboard.
+
+**Available endpoints:**
+
+| Endpoint | Description |
+|---|---|
+| `/` | Root endpoint |
+| `/health` | Backend health check |
+| `/api/v1/summary` | Overall project metrics |
+| `/api/v1/trends/hourly` | Hourly event trends |
+| `/api/v1/developers/activity` | Developer activity analysis |
+| `/api/v1/sources/activity` | Source activity analysis |
+| `/api/v1/context-switches` | Source transition analysis |
+| `/api/v1/transitions/summary` | Team-level transition summary |
+| `/api/v1/developers/transitions/summary` | Developer-level transition summary |
+
+The backend connects to ClickHouse and provides the aggregated results required by the dashboard.
+
+## Interactive Dashboard
+
+The frontend is developed using **React, Tremor.js, and Tailwind CSS**.
+
+The dashboard provides an interactive view of developer workflow activity.
+
+**Dashboard capabilities:**
+- KPI cards for overall event and developer metrics.
+- Hourly activity trend visualization.
+- Developer activity breakdown.
+- Source-level activity comparison.
+- Context-switch analytics.
+- Developer-level transition analysis.
+- Team-level source transition analysis.
+- Recent source transition records.
+- Team and developer filters.
+
+Dashboard data is retrieved from the FastAPI backend.
+
+## Project Validation and Testing
+
+CogniStream has been validated across its data processing, database, backend, orchestration, and frontend components.
+
+### Validation Results
+
+| Component | Validation |
+|---|---|
+| Event schema validation | 120/120 valid events |
+| Unique event IDs | 120 |
+| ClickHouse loading | 120 events verified |
+| Source distribution | 30 events per source |
+| Airflow DAG | All 4 tasks successful |
+| Analytics API | 7 endpoints tested |
+| Frontend dashboard | Functional validation completed |
+
+### Automated Tests
+
+The project test suite was executed using:
 
 ```powershell
-python ingestion/schemas/validate_events.py
+python -m pytest -q
 ```
 
-### 6.3 Data processing
+**Latest test result:**
 
-The Python processing pipeline:
+`46 passed, 1 warning`
 
-- Reads the four JSONL source files.
-- Validates and parses the records.
-- Normalizes event fields.
-- Serializes metadata.
-- Converts timestamps into UTC-aware datetimes.
-- Sorts events chronologically.
-- Generates a consolidated Parquet dataset.
+The warning relates to a Starlette deprecation notice and did not cause test failures.
 
-Run the processing script:
-
-```powershell
-python processing/combine_events.py
-```
-
-Output:
-
-```text
-data/processed/all_events.parquet
-```
-
-### 6.4 ClickHouse storage
-
-The consolidated dataset is stored in the `developer_events` table inside the `cognistream` database.
-
-The last verified checkpoint contained:
-
-- 120 rows.
-- 120 unique event IDs.
-
-The table stores event identifiers, source, event type, developer and team identifiers, timestamps, and JSON metadata.
-
-### 6.5 SQL analytics
-
-Existing SQL analytics explore:
-
-- Activity summaries by source.
-- Source transitions grouped by team and source pair.
-- Potential source changes for individual developers.
-- Team-level event-gap summaries.
-- Validation of event-gap classifications.
-
-These are descriptive indicators for exploratory analysis. They do not directly measure cognitive load or productivity.
-
-### 6.6 Apache Airflow orchestration
-
-The CogniStream Airflow DAG orchestrates four pipeline tasks:
-
-1. `validate_raw_events`
-2. `combine_events_to_parquet`
-3. `load_events_to_clickhouse`
-4. `verify_clickhouse_load`
-
-A successful run has been verified with all four tasks succeeding and the 120-event dataset present in ClickHouse.
-
-The current Airflow setup is intended for local development and is not a production deployment.
-
-### 6.7 FastAPI analytics backend
-
-The FastAPI application connects to ClickHouse through centralized environment-based configuration.
-
-The summary service retrieves:
-
-- Total event count.
-- Number of unique developers.
-- Number of unique teams.
-- Event counts grouped by source.
-
-The available endpoints are:
-
-- `GET /` — Basic API information.
-- `GET /health` — API health response.
-- `GET /api/v1/summary` — Summary statistics from ClickHouse.
-
-Example summary response:
-
-```json
-{
-  "total_events": 120,
-  "unique_developers": 5,
-  "unique_teams": 2,
-  "events_by_source": [
-    {"source": "github", "count": 30},
-    {"source": "ide", "count": 30},
-    {"source": "jira", "count": 30},
-    {"source": "slack", "count": 30}
-  ]
-}
-```
-
-The values above represent the current synthetic dataset and may change when the input data changes.
-
-## 7. Data Model
-
-The primary ClickHouse table is `developer_events`.
-
-| Column | Data type | Description |
-|---|---|---|
-| `event_id` | String | Unique event identifier |
-| `source` | LowCardinality(String) | Originating activity platform |
-| `event_type` | LowCardinality(String) | Type of recorded event |
-| `developer_id` | String | Developer identifier |
-| `team_id` | String | Team identifier |
-| `timestamp` | DateTime64(3, 'UTC') | Event timestamp |
-| `metadata_json` | String | Additional event metadata |
-
-The common event structure allows activity records from different sources to be stored and analyzed consistently.
-
-## 8. Data Pipeline Workflow
-
-The pipeline follows a sequence of dependent operations.
-
-### Step 1: Event collection
-
-Synthetic activity records are generated for GitHub, Slack, Jira, and IDE activity.
-
-### Step 2: Validation
-
-The records are checked against the shared event schema to identify invalid or incomplete data.
-
-### Step 3: Processing
-
-Python and Polars consolidate the source records into a common structure.
-
-### Step 4: Parquet generation
-
-The processed events are written into a unified Parquet file.
-
-### Step 5: Database loading
-
-The processed records are loaded into ClickHouse.
-
-### Step 6: Verification
-
-The pipeline checks that the expected records have been loaded successfully.
-
-### Step 7: Analytics
-
-SQL queries and the FastAPI backend provide access to summary information.
-
-Apache Airflow manages the execution and dependencies of these pipeline tasks.
-
-## 9. Analytics Methodology
-
-### 9.1 Source activity
-
-Events can be grouped by their source to understand how recorded activity is distributed across GitHub, Slack, Jira, and IDE activity.
-
-### 9.2 Source transitions
-
-A transition occurs when two consecutive recorded events for the same developer have different source values.
-
-Transitions can be grouped by team and source pair.
-
-For example:
-
-```text
-GitHub → Slack
-Slack  → Jira
-Jira   → IDE
-```
-
-These transitions indicate changes in recorded activity sources, not necessarily actual interruptions.
-
-### 9.3 Event-gap classification
-
-The current SQL analysis uses a threshold of **1,800 seconds (30 minutes)** to distinguish shorter from longer event gaps.
-
-This is an exploratory assumption, not a validated cognitive-science threshold.
-
-### 9.4 Interpretation limits
-
-- A source transition does not prove an interruption occurred.
-- A gap between events does not establish how long focus recovery took.
-- Synthetic events do not represent observed employee behavior.
-- Event counts are not equivalent to productivity or work quality.
-- Team and developer summaries describe the generated dataset, not actual employee performance.
-
-## 10. API Reference
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/` | Basic API information |
-| GET | `/health` | Health check |
-| GET | `/api/v1/summary` | Event, developer, team and source counts |
-
-When the local API is running, interactive API documentation is available at:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-The summary endpoint provides the current analytical overview from ClickHouse.
-
-## 11. Project Demonstration Guide
-
-This section provides a practical sequence for demonstrating the currently implemented components of CogniStream.
-
-### 11.1 Demonstrate event validation
-
-Run:
-
-```powershell
-python ingestion/schemas/validate_events.py
-```
-
-Explain that the validation process checks the synthetic event records against the shared schema before they enter the processing pipeline.
-
-### 11.2 Demonstrate data processing
-
-Run:
-
-```powershell
-python processing/combine_events.py
-```
-
-Explain that Polars is used to combine and transform events from multiple sources into a common dataset.
-
-The resulting Parquet file is:
-
-```text
-data/processed/all_events.parquet
-```
-
-### 11.3 Demonstrate ClickHouse storage
-
-Connect to the local ClickHouse instance and inspect the database.
-
-Example SQL:
-
-```sql
-SELECT count()
-FROM developer_events;
-```
-
-To inspect activity distribution:
-
-```sql
-SELECT
-    source,
-    count() AS event_count
-FROM developer_events
-GROUP BY source
-ORDER BY source;
-```
-
-Explain that ClickHouse stores the processed event records and supports analytical queries.
-
-### 11.4 Demonstrate the Airflow pipeline
-
-Start the local Docker Compose and Airflow environment.
-
-Open the Airflow interface:
-
-```text
-http://localhost:8080
-```
-
-Locate the `cognistream_pipeline` DAG and inspect its tasks:
-
-1. `validate_raw_events`
-2. `combine_events_to_parquet`
-3. `load_events_to_clickhouse`
-4. `verify_clickhouse_load`
-
-Explain that Airflow manages the pipeline workflow and ensures tasks execute in the required order.
-
-### 11.5 Demonstrate the FastAPI backend
-
-Start the backend from the project root:
-
-```powershell
-python -m uvicorn backend.app.main:app --reload
-```
-
-Open the interactive documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Demonstrate these endpoints:
-
-```text
-GET /
-GET /health
-GET /api/v1/summary
-```
-
-Explain that the summary endpoint retrieves analytical information from ClickHouse.
-
-### 11.6 Dashboard demonstration status
-
-The React + Tremor.js dashboard is planned / in progress.
-
-The current implementation exposes summary analytics through FastAPI, but the complete interactive frontend and dashboard integration are not yet complete.
-
-The dashboard is intended to present information such as:
-
-- Total recorded events.
-- Unique developers and teams.
-- Activity distribution by source.
-- Activity trends over time.
-- Source transitions and workflow indicators.
-
-These are intended dashboard capabilities and should not be presented as completed frontend features until implemented.
-
-## 12. Data Quality and Testing
-
-The project includes:
-
-- Event schema validation.
-- ClickHouse data-quality queries.
-- Processing tests.
-- API tests.
-
-Run the complete test suite from the repository root:
-
-```powershell
-python -m pytest -v
-```
-
-The latest recorded test checkpoint was:
-
-```text
-22 tests passed
-```
-
-Re-run the test suite after code changes to confirm the current result.
-
-The API tests cover the root endpoint, health endpoint, and analytics summary response.
-
-The summary test uses the local ClickHouse dataset, so ClickHouse must be available and populated when running the complete API test suite.
-
-## 13. Repository Structure
+## Project Structure
 
 ```text
 CogniStream/
 │
 ├── airflow/
 │   └── dags/
-│       └── cognistream_pipeline.py
 │
 ├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   └── analytics.py
-│   │   ├── core/
-│   │   │   └── config.py
-│   │   ├── services/
-│   │   │   ├── analytics.py
-│   │   │   └── clickhouse.py
-│   │   └── main.py
-│   └── tests/
-│       └── test_api.py
+│   └── app/
+│       ├── api/
+│       ├── services/
+│       └── main.py
 │
 ├── data/
 │   ├── raw/
 │   └── processed/
 │
 ├── docs/
+│
 ├── frontend/
+│   ├── src/
+│   ├── public/
+│   └── package.json
 │
 ├── ingestion/
-│   ├── mock_apis/
 │   └── schemas/
 │
 ├── processing/
-│   └── combine_events.py
 │
 ├── sql/
-│   ├── analytics/
-│   └── schemas/
+│   └── analytics/
 │
 ├── tests/
+│
 ├── requirements.txt
 └── README.md
 ```
 
-Some directories are intended for future work and may not yet contain a complete implementation.
+## Getting Started
 
-## 14. Getting Started
+Follow these instructions to set up CogniStream locally.
 
-### 14.1 Prerequisites
+### Prerequisites
 
-- Python installed.
-- Git installed.
-- Project dependencies.
-- A running ClickHouse instance.
-- A local `.env` file configured with ClickHouse connection settings.
-- Docker and Docker Compose for the local Airflow environment.
+- Python
+- Node.js and npm
+- Docker Desktop
+- Git
 
-### 14.2 Clone the repository
+### 1. Clone the Repository
 
 ```powershell
 git clone https://github.com/SHREYASHRAW/CogniStream.git
 cd CogniStream
 ```
 
-### 14.3 Create and activate a virtual environment
+### 2. Set Up Python Environment
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\activate
 ```
 
-### 14.4 Install dependencies
+Install dependencies:
 
 ```powershell
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
-### 14.5 Configure ClickHouse
+### 3. Configure Environment Variables
 
-Create a local `.env` file in the repository root:
+Create a `.env` file in the project root and configure your local ClickHouse connection:
 
-```dotenv
+```env
 CLICKHOUSE_HOST=localhost
 CLICKHOUSE_PORT=8123
 CLICKHOUSE_DATABASE=cognistream
@@ -647,107 +379,97 @@ CLICKHOUSE_USER=cogni
 CLICKHOUSE_PASSWORD=your_local_password
 ```
 
-Replace the example password with your local ClickHouse password.
+Replace the password with the password configured in your local ClickHouse environment.
 
-**Do not commit `.env` files, passwords, tokens, or other secrets to Git.**
+Do not commit `.env` or any credentials to GitHub.
 
-### 14.6 Generate and process events
+### 4. Start the Services
 
-Generate or prepare the synthetic source files under `data/raw/`.
+Start the configured Docker services for ClickHouse and Airflow.
 
-Run:
+Ensure ClickHouse is accessible on port `8123`.
 
-```powershell
-python ingestion/schemas/validate_events.py
-python processing/combine_events.py
-```
+### 5. Run the Backend
 
-### 14.7 Start the API
-
-With the virtual environment active and ClickHouse available:
+From the project root:
 
 ```powershell
 python -m uvicorn backend.app.main:app --reload
 ```
 
-Open:
+Backend address:
 
-- API root: `http://127.0.0.1:8000/`
-- Health check: `http://127.0.0.1:8000/health`
-- Analytics summary: `http://127.0.0.1:8000/api/v1/summary`
-- Interactive documentation: `http://127.0.0.1:8000/docs`
+`http://127.0.0.1:8000`
 
-### 14.8 Run tests
+### 6. Run the Frontend
+
+Open another terminal:
 
 ```powershell
-python -m pytest -v
+cd frontend
+npm install
+npm run dev
 ```
 
-Ensure that ClickHouse is available and contains the expected test dataset before running the complete API test suite.
+Open the local Vite development URL displayed in your terminal, normally:
 
-### 14.9 Run the Airflow pipeline
+`http://localhost:5173/`
 
-Use the project's local Docker Compose / Airflow setup.
+### 7. Run Automated Tests
 
-Ensure ClickHouse is running and reachable from the Airflow container.
+From the project root:
 
-The DAG validates raw events, generates the Parquet dataset, loads events into ClickHouse, and verifies the load.
+```powershell
+python -m pytest -q
+```
 
-Connection values should be supplied through local environment configuration. Do not commit passwords or credentials.
+### 8. Run the Airflow Pipeline
 
-## 15. Current Limitations
+Run the `cognistream_pipeline` DAG using your configured Airflow environment.
 
-The current project has the following limitations:
+The DAG executes validation, Parquet processing, ClickHouse loading, and load verification.
 
-- Data is synthetic and generated for development and testing.
-- Ingestion uses local files rather than live external APIs.
-- The dataset is small and intended for functional validation.
-- Workflow indicators have not been validated against real developer workflows.
-- The current API exposes a summary endpoint; more analytical endpoints are still needed.
-- The React + Tremor.js dashboard is not yet complete.
-- No claims of measured cognitive load, focus recovery, or productivity improvement are made.
-- The current Airflow environment is intended for local development rather than production deployment.
+## Project Demonstration
 
-## 16. Future Roadmap
+A typical demonstration workflow:
 
-The planned development activities are:
+1. Start the ClickHouse and Airflow services.
+2. Execute the Airflow pipeline.
+3. Confirm that the event dataset is loaded into ClickHouse.
+4. Start the FastAPI backend.
+5. Start the React frontend.
+6. Open the dashboard.
+7. Explore developer activity, source activity, hourly trends, and transition analytics.
+8. Apply team and developer filters to explore the analytical results.
 
-### Completed
+## Current Limitations
 
-- [x] Create synthetic GitHub, Slack, Jira, and IDE event generators.
-- [x] Implement event schema validation.
-- [x] Consolidate events using Python and Polars.
-- [x] Generate a unified Parquet dataset.
-- [x] Store unified events in ClickHouse.
-- [x] Create baseline source activity and transition analytics.
-- [x] Add automated processing and data-quality tests.
-- [x] Orchestrate validation, processing, loading, and verification with Apache Airflow.
-- [x] Expose summary analytics through FastAPI.
-- [x] Add automated API tests.
+- The dataset is synthetic and relatively small.
+- The project does not currently ingest live developer activity from external platforms.
+- The 30-minute transition threshold is configurable and exploratory.
+- Source transitions are workflow activity proxies, not direct measurements of cognitive state or productivity.
+- The dashboard and API operate on the currently loaded analytical dataset.
 
-### Planned / In progress
+## Future Enhancements
 
-- [ ] Expand analytics endpoints and analytical edge-case tests.
-- [ ] Refine session definitions and event-gap interpretation.
-- [ ] Build the React + Tremor.js dashboard.
-- [ ] Add dashboard integration and end-to-end tests.
-- [ ] Complete reproducible end-to-end setup documentation.
-- [ ] Explore additional workflow indicators and visualizations.
+Potential improvements include:
 
-## 17. Project Philosophy
+- Integration with real GitHub, Slack, Jira, and IDE event sources.
+- Larger and more diverse event datasets.
+- Advanced workflow pattern analysis.
+- More comprehensive historical trend analysis.
+- Automated alerts for unusual workflow patterns.
+- Further dashboard enhancements and deployment.
 
-CogniStream is a learning and portfolio project focused on practical data engineering, analytical SQL, testing, and transparent interpretation of data.
+## Project Information
 
-The guiding principle is to measure what the data supports, document assumptions clearly, and avoid presenting workflow proxies as direct measurements of human cognition.
+**Project:** CogniStream  
+**Category:** Data Engineering and Analytics  
+**Focus:** Developer Workflow Analytics  
+**Repository:** [SHREYASHRAW/CogniStream](https://github.com/SHREYASHRAW/CogniStream)
 
-The project aims to demonstrate how activity data from multiple sources can be transformed into a unified analytical system using modern data engineering technologies.
+**Core Technologies:** Python, Polars, Apache Airflow, ClickHouse, SQL, FastAPI, React, Tremor.js, Tailwind CSS, Docker, and pytest.
 
 ---
 
-**Project:** CogniStream
-**Focus:** Developer Workflow Analytics and Data Engineering
-**Backend:** Python + FastAPI
-**Data Processing:** Python + Polars
-**Database:** ClickHouse
-**Orchestration:** Apache Airflow
-**Frontend:** React + Tremor.js (planned / in progress)
+*CogniStream demonstrates an end-to-end data engineering and analytics workflow, from synthetic event generation and processing to analytical storage, API development, orchestration, and interactive visualization.*
