@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 import {
   AreaChart,
@@ -155,7 +154,7 @@ function App() {
     const grouped = {};
 
     contextData.forEach((item) => {
-      const label = `${item.previous_source} → ${item.current_source}`;
+      const label = `${item.previous_source} â†’ ${item.current_source}`;
       grouped[label] = (grouped[label] || 0) + 1;
     });
 
@@ -172,7 +171,7 @@ function App() {
           selectedTeam === "All" || item.team_id === selectedTeam
       )
       .map((item) => ({
-        transition: `${item.previous_source} → ${item.current_source}`,
+        transition: `${item.previous_source} â†’ ${item.current_source}`,
         team_id: item.team_id,
         total_transitions: item.total_transitions,
         short_gap_transitions: item.short_gap_transitions,
@@ -255,7 +254,7 @@ function App() {
   );
 
   const formatTimestamp = (value) => {
-    if (!value) return "—";
+    if (!value) return "â€”";
 
     return new Date(value).toLocaleString([], {
       day: "2-digit",
@@ -281,22 +280,22 @@ function App() {
   const metrics = [
     {
       title: "Total Events",
-      value: summary?.total_events ?? "—",
+      value: summary?.total_events ?? "â€”",
       description: "Recorded workflow events",
     },
     {
       title: "Active Developers",
-      value: summary?.unique_developers ?? "—",
+      value: summary?.unique_developers ?? "â€”",
       description: "Developers represented",
     },
     {
       title: "Connected Sources",
-      value: summary?.events_by_source?.length ?? "—",
+      value: summary?.events_by_source?.length ?? "â€”",
       description: "Integrated platforms",
     },
     {
       title: "Teams",
-      value: summary?.unique_teams ?? "—",
+      value: summary?.unique_teams ?? "â€”",
       description: "Teams represented",
     },
   ];
@@ -426,7 +425,8 @@ function App() {
             )}
 
             {/* Overview KPIs */}
-            <section>
+            {activePage === "Overview" && (
+              <section>
               <div className="mb-6">
                 <Title>Developer Activity Overview</Title>
                 <Text>
@@ -445,9 +445,11 @@ function App() {
                 ))}
               </div>
             </section>
+            )}
 
             {/* Hourly Activity and Sources */}
-            <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            {activePage === "Overview" && (
+              <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <Card className="xl:col-span-2">
                 <Title>Hourly Activity Trends</Title>
                 <Text>
@@ -503,9 +505,11 @@ function App() {
                 </div>
               </Card>
             </section>
+            )}
 
             {/* Developer Activity */}
-            <section>
+            {activePage === "Developer Activity" && (
+              <section>
               <Card>
                 <Title>Developer Activity Comparison</Title>
                 <Text>
@@ -561,9 +565,11 @@ function App() {
                 </div>
               </Card>
             </section>
+            )}
 
             {/* Source Activity */}
-            <section>
+            {activePage === "Source Analytics" && (
+              <section>
               <div className="mb-5">
                 <Title>Source Activity Analytics</Title>
                 <Text>
@@ -613,9 +619,11 @@ function App() {
                 ))}
               </div>
             </section>
+            )}
 
             {/* Context Switch Analytics */}
-            <section>
+            {activePage === "Context Switches" && (
+              <section>
               <div className="mb-6">
                 <Title>Context-Switch Analytics</Title>
                 <Text>
@@ -732,9 +740,11 @@ function App() {
                 </div>
               </Card>
             </section>
+            )}
 
             {/* Transition Summary Analytics */}
-            <section>
+            {activePage === "Transitions" && (
+              <section>
               <div className="mb-6">
                 <Title>Transition Summary Analytics</Title>
                 <Text>
@@ -949,10 +959,11 @@ function App() {
                 recovery, cognitive load, or productivity.
               </p>
             </section>
+            )}
 
             {/* Footer */}
             <footer className="border-t border-slate-200 pt-5 text-center text-xs text-slate-400">
-              CogniStream · Developer Flow-State & Cognitive Load Analytics
+              CogniStream Â· Developer Flow-State & Cognitive Load Analytics
               <p className="mt-1">
                 Workflow activity indicators are analytical proxies, not
                 direct measurements of cognitive state or productivity.
