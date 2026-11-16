@@ -265,6 +265,44 @@ The dashboard provides an interactive view of developer workflow activity.
 - Recent source transition records.
 - Team and developer filters.
 
+## Dashboard Preview
+
+CogniStream includes an interactive analytics dashboard built with React, Tremor.js, and Tailwind CSS. It provides insights into developer activity, source distribution, hourly trends, and workflow transitions.
+
+### 1. Overview Dashboard
+
+The overview page presents the key project metrics, including total events, active developers, connected sources, and teams.
+
+![CogniStream Overview KPIs](docs/images/dashboard_overview_kpis.png)
+
+**Hourly Activity Trends**
+
+![Hourly Activity](docs/images/dashboard_hourly_activity.png)
+
+### 2. Developer Activity
+
+Explore developer-level activity patterns and compare contributions across connected development tools.
+
+![Developer Activity Analytics](docs/images/developer_activity.png)
+
+### 3. Source Analytics
+
+Analyze event distribution and activity across GitHub, Slack, Jira, and IDE sources.
+
+![Source Analytics](docs/images/source_analytics.png)
+
+### 4. Context Switch Analytics
+
+Examine source transitions, including short-gap and long-gap classifications, to understand developer workflow patterns.
+
+![Context Switch Analytics](docs/images/context_switch_analytics.png)
+
+### 5. Transition Analysis
+
+Explore team-level and developer-level source transition patterns using analytical summaries and interactive filters.
+
+![Transition Analysis](docs/images/transition_analysis.png)
+
 Dashboard data is retrieved from the FastAPI backend.
 
 ## Project Validation and Testing
